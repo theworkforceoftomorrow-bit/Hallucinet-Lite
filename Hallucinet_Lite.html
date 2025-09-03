@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hallucinet Lite — 2‑sentence verdict</title>
+<style>
+  :root{--bg:#0b0e13;--card:#111725;--ink:#e8edf6;--muted:#9fb0c6;--edge:#1b2535;--accent:#73b3ff;--warn:#ff7a7a;--ok:#7affb2}
+  *{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Arial}
+  body{margin:0;background:linear-gradient(180deg,#0a0d12,#0d121a);color:var(--ink)}
+  header{padding:18px 20px;border-bottom:1px solid var(--edge);position:sticky;top:0;background:#0a0d12cc;backdrop-filter:blur(6px)}
+  h1{margin:0;font-size:18px;letter-spacing:.3px}
+  main{max-width:800px;margin:24px auto;padding:0 16px 60px}
+  .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:16px;box-shadow:0 8px 20px rgba(0,0,0,.25)}
+  label{font-size:13px;color:#cfe1ff;margin-bottom:6px;display:block}
+  textarea{width:100%;min-height:110px;background:#0e141e;color:var(--ink);border:1px solid var(--edge);border-radius:12px;padding:12px;resize:vertical}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  button{border:1px solid var(--edge);background:linear-gradient(180deg,#263146,#1a2333);color:var(--ink);padding:10px 14px;border-radius:12px;cursor:pointer}
+  button:hover{filter:brightness(1.08)}
+  .muted{color:var(--muted);font-size:12px}
+  .verdict{margin-top:14px;padding:12px;border-radius:12px;border:1px solid var(--edge);background:#0e141e}
+  .good{border-color:#1f3d2a}
+  .bad{border-color:#3d1f1f}
+  a{color:#9bc6ff}
+  footer{position:fixed;bottom:0;left:0;right:0;background:#0a0d12cc;border-top:1px solid var(--edge);backdrop-filter:blur(6px);padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
+</style>
+</head>
+<body>
+<header><h1>Hallucinet Lite — paste prompt + model output, get a 2–3 sentence verdict</h1></header>
+<main>
+  <div class="card">
+    <label>Prompt</label>
+    <textarea id="prompt" placeholder="Paste the exact prompt you gave the model"></textarea>
+    <label style="margin-top:10px">Model Output</label>
+    <textarea id="output" placeholder="Paste the model's answer here"></textarea>
+    <div class="row">
+      <button id="check">Check for Hallucination</button>
+      <button id="example">Load Example</button>
+    </div>
+    <div class="muted" style="margin-top:8px">Note: Demo works offline and uses a small built‑in fact set and consistency checks. For claims outside that set, it will return an “uncertain” verdict.</div>
+    <div id="verdict" class="verdict muted">No analysis yet.</div>
+  </div>
+</main>
+<footer>
+  <div class="muted">CAI: “Hallucination is a compression fracture.” • Single‑file demo</div>
+  <div class="muted">Built: 2025-09-03 15:51</div>
+</footer>
+
+<script>
+// Tiny offline knowledge base (demo purposes only)
+const KB = [
+  {pattern:/berlin wall/i, fact:"The Berlin Wall fell in 1989.", check: (text)=>/1989/.test(text)},
+  {pattern:/titanic/i, fact:"RMS Titanic sank in 1912.", check: (text)=>/1912/.test(text)},
+  {pattern:/moon landing|apollo 11/i, fact:"Apollo 11 landed on the Moon in 1969.", check: (text)=>/1969/.test(text)},
+  {pattern:/capital of france|paris/i, fact:"The capital of France is Paris.", check: (text)=>/\bparis\b/i.test(text)},
+  {pattern:/speed of light/i, fact:"Speed of light ≈ 299,792 km/s.", check: (text)=>/299,?792/.test(text)},
+  {pattern:/einstein.*relativity|relativity.*einstein/i, fact:"Einstein proposed special relativity in 1905.", check: (text)=>/1905/.test(text)},
+];
+
+const CONF_WORDS = ["definitely","clearly","certainly","undoubtedly","always","never","the only","prove","proves","guarantee"];
+const CONTRA_PAIRS = [["is","is not"],["did","did not"],["exists","does not exist"],["supports","contradicts"]];
+
+function verdictText(prompt, output){
+  const low = output.toLowerCase();
+  let kbHit = null;
+  for(const item of KB){
+    if(item.pattern.test(prompt) || item.pattern.test(output)){
+      kbHit = item; break;
+    }
+  }
+  // 1) Self-contradiction check
+  let selfContradiction = false;
+  for(const [a,b] of CONTRA_PAIRS){
+    if(low.includes(" "+a+" ") && low.includes(" "+b+" ")){ selfContradiction = true; break; }
+  }
+  // 2) Confidence without verifiable anchor
+  const conf = CONF_WORDS.filter(w=>low.includes(w));
+  // 3) KB verification if applicable
+  let kbContradiction = false;
+  if(kbHit){
+    kbContradiction = !kbHit.check(output);
+  }
+  // Build concise verdict
+  if(selfContradiction){
+    return {type:"bad", text:`This output likely contains a hallucination. It contradicts itself in phrasing, which suggests the narrative is smoothing over unresolved conflict rather than presenting a stable claim.`};
+  }
+  if(kbHit && kbContradiction){
+    return {type:"bad", text:`This output likely contains a hallucination. It conflicts with a well‑established fact (${kbHit.fact}), indicating the answer prioritized fluency over truth.`};
+  }
+  if(!kbHit){
+    const confNote = conf.length? " The language is very confident without cited support, so treat with caution." : "";
+    return {type:"neutral", text:`This output cannot be fully verified by the demo’s offline fact set. No internal contradictions were detected.${confNote}`};
+  }
+  // Supported by KB
+  return {type:"good", text:`No obvious hallucination detected. The answer aligns with a well‑established fact (${kbHit.fact}) and shows no internal contradictions.`};
+}
+
+function setVerdict(v){
+  const box = document.getElementById('verdict');
+  box.className = "verdict";
+  if(v.type==="bad") box.classList.add("bad");
+  if(v.type==="good") box.classList.add("good");
+  box.textContent = v.text;
+  box.classList.remove("muted");
+}
+
+document.getElementById('check').addEventListener('click', ()=>{
+  const p = document.getElementById('prompt').value.trim();
+  const o = document.getElementById('output').value.trim();
+  if(!p || !o){ setVerdict({type:"neutral", text:"Please paste both the prompt and the model’s output."}); return; }
+  const v = verdictText(p,o);
+  setVerdict(v);
+});
+
+document.getElementById('example').addEventListener('click', ()=>{
+  document.getElementById('prompt').value = "What year did the Berlin Wall fall?";
+  document.getElementById('output').value = "The Berlin Wall clearly fell in 1991 after protests.";
+  document.getElementById('verdict').textContent = "Ready — click Check.";
+  document.getElementById('verdict').className = "verdict muted";
+});
+</script>
+</body>
+</html>
