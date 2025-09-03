@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hallucinet Lite (Fracture Highlight Edition)</title>
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;background:#0b0e13;color:#e8edf6;margin:0}
+  header{padding:18px;background:#111725;border-bottom:1px solid #1b2535}
+  h1{margin:0;font-size:18px}
+  main{max-width:800px;margin:24px auto;padding:0 16px}
+  .card{background:#111725;padding:16px;border-radius:12px;border:1px solid #1b2535}
+  label{font-size:13px;color:#cfe1ff;margin-bottom:6px;display:block}
+  textarea{width:100%;min-height:100px;background:#0e141e;color:#e8edf6;border:1px solid #1b2535;border-radius:10px;padding:10px;margin-bottom:12px}
+  button{padding:10px 14px;border-radius:10px;border:1px solid #1b2535;background:#263146;color:#e8edf6;cursor:pointer}
+  button:hover{filter:brightness(1.1)}
+  .verdict{margin-top:14px;padding:12px;border-radius:10px;background:#0e141e;border:1px solid #1b2535;line-height:1.5}
+  .bad{border-color:#ff7a7a}
+  .good{border-color:#7affb2}
+  .neutral{border-color:#9fb0c6}
+  mark{background:#ff7a7a;color:#fff;padding:0 2px;border-radius:3px}
+  .muted{color:#9fb0c6;font-size:13px;margin-top:8px}
+</style>
+</head>
+<body>
+<header><h1>Hallucinet Lite — Compression-Aware Intelligence (Fracture Highlight)</h1></header>
+<main>
+  <div class="card">
+    <label>Prompt</label>
+    <textarea id="prompt" placeholder="Paste the prompt you gave the model"></textarea>
+    <label>Model Output</label>
+    <textarea id="output" placeholder="Paste the model's answer"></textarea>
+    <button id="check">Check for Fracture</button>
+    <button id="example" style="margin-left:10px">Load Example</button>
+    <div id="verdict" class="verdict neutral">No analysis yet.</div>
+    <div class="muted">CAI: Hallucination = compression fracture. Contradiction compressed into a fluent but unstable narrative.</div>
+  </div>
+</main>
+
+<script>
+const KB = [
+  {pattern:/berlin wall/i, fact:"The Berlin Wall fell in 1989.", regex:/1991/gi, truth:"1989"},
+  {pattern:/titanic/i, fact:"RMS Titanic sank in 1912.", regex:/1913|1914|1915/gi, truth:"1912"},
+  {pattern:/moon landing|apollo 11/i, fact:"Apollo 11 landed on the Moon in 1969.", regex:/1970|1971/gi, truth:"1969"},
+  {pattern:/capital of france|paris/i, fact:"The capital of France is Paris.", regex:/london|berlin|madrid/gi, truth:"Paris"}
+];
+
+function highlightFracture(text, regex){
+  return text.replace(regex, match=>`<mark title="Fracture point: compressed contradiction">${match}</mark>`);
+}
+
+function verdictText(prompt, output){
+  let kbHit = null;
+  for(const item of KB){
+    if(item.pattern.test(prompt) || item.pattern.test(output)){ kbHit=item; break; }
+  }
+  if(kbHit){
+    if(kbHit.regex.test(output)){
+      let highlighted = highlightFracture(output, kbHit.regex);
+      return {type:"bad", html:`<p>❌ <strong>Fracture detected.</strong> The system compressed a contradiction into fluency:</p><p>${highlighted}</p><p>Fact: ${kbHit.fact}. This is a structural hallucination under CAI — a compression fracture revealed.</p>`};
+    } else {
+      return {type:"good", html:`<p>✅ <strong>No fracture detected.</strong> The answer aligns with a stable fact.</p><p>${output}</p><p>Fact: ${kbHit.fact}.</p>`};
+    }
+  }
+  return {type:"neutral", html:`<p>⚠️ <strong>Unverifiable.</strong> No contradiction found, but this claim cannot be mapped to a stable fact in the demo’s knowledge.</p><p>${output}</p><p>Treat as a possible compression fracture.</p>`};
+}
+
+document.getElementById('check').addEventListener('click', ()=>{
+  let p=document.getElementById('prompt').value.trim();
+  let o=document.getElementById('output').value.trim();
+  if(!p||!o){document.getElementById('verdict').innerHTML="Please enter both a prompt and an output.";return;}
+  let v=verdictText(p,o);
+  let box=document.getElementById('verdict');
+  box.className="verdict "+v.type;
+  box.innerHTML=v.html+"<p class='muted'>(Powered by Compression-Aware Intelligence)</p>";
+});
+
+document.getElementById('example').addEventListener('click', ()=>{
+  document.getElementById('prompt').value="What year did the Berlin Wall fall?";
+  document.getElementById('output').value="The Berlin Wall clearly fell in 1991 after protests.";
+  document.getElementById('verdict').textContent="Ready — click Check.";
+  document.getElementById('verdict').className="verdict neutral";
+});
+</script>
+</body>
+</html>
